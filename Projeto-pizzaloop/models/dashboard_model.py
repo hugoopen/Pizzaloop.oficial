@@ -1,3 +1,4 @@
+import datetime
 class DashboardModel:
 
     def __init__(self, conexao_banco):
@@ -49,24 +50,32 @@ class DashboardModel:
             else:
                 p["data_formatada"] = "--"
         return pedidos
-
+    
     def obter_vendas_semana(self):
+        hoje = datetime.date.today()
+        data_inicio = hoje - datetime.timedelta(days=6)
+
         cursor = self.conexao.cursor()
         cursor.execute("""
             SELECT DATE(data_hora), COALESCE(SUM(valor_total), 0)
             FROM pedidos
-            WHERE data_hora >= CURDATE() - INTERVAL 6 DAY
+            WHERE DATE (data_hora) BETWEEN %s AND %s
             GROUP BY DATE(data_hora)
-            ORDER BY DATE(data_hora) ASC
-        """)
+        """, (data_inicio, hoje))
         rows = cursor.fetchall()
         cursor.close()
+        
+        vendas_por_data = {data: float(total) for data, total in rows}
+
         dias_semana = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
         resultado = []
-        for data, total in rows:
-            resultado.append((dias_semana.get(data.weekday(), "?"), float(total)))
+        for i in range(7):
+            data_atual = data_inicio + datetime.timedelta(days=i)
+            rotulo = dias_semana[data_atual.weekday()]
+            valor = vendas_por_data.get(data_atual, 0.0)
+            resultado.append((rotulo, valor, data_atual))
         return resultado
-
+    
     def obter_pedidos_abertos_por_status(self):
         """Retorna dicionário {status: [lista de pedidos]} para os status em aberto."""
         cursor = self.conexao.cursor(dictionary=True)

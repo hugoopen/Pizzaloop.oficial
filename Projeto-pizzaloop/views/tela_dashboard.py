@@ -28,7 +28,6 @@ STATUS_CORES = {
     "aguardando": ("#F1F5F9", "#475569"),
 }
 
-# Configuração de cada coluna do painel de tempo real
 COLUNAS_STATUS = [
     ("Aguardando",  "⏸",  "#F1F5F9", "#475569", "#E2E8F0"),
     ("Em preparo",  "⏳",  COR_AMBER_CLARO, "#D97706", "#FDE68A"),
@@ -78,9 +77,7 @@ def _card_kpi(parent, titulo, valor, subtexto, cor_valor, emoji, cor_icone_bg):
 def _desenhar_grafico(canvas_grafico, dados):
     """
     Desenha o gráfico de linha de faturamento da semana.
-    Exibe grade horizontal, eixo Y com valores formatados, área sombreada
-    abaixo da linha, pontos interativos com tooltip de valor ao passar o mouse,
-    e rótulos de dia no eixo X.
+    Cada item de `dados` é (rotulo_dia, valor, data).
     """
     canvas_grafico.delete("all")
     larg = canvas_grafico.winfo_width()
@@ -88,7 +85,6 @@ def _desenhar_grafico(canvas_grafico, dados):
     if larg < 10 or alt < 10:
         return
 
-    # Caso sem dados — exibe mensagem centralizada
     if not dados:
         canvas_grafico.create_text(
             larg // 2, alt // 2,
@@ -97,37 +93,32 @@ def _desenhar_grafico(canvas_grafico, dados):
         )
         return
 
-    # ── Margens ─────────────────────────────────────────────────────
-    pad_left  = 72   # espaço para o eixo Y
+    pad_left  = 72
     pad_right = 24
     pad_top   = 28
-    pad_bot   = 42   # espaço para o eixo X
+    pad_bot   = 42
 
     area_larg = larg - pad_left - pad_right
     area_alt  = alt  - pad_top  - pad_bot
 
-    valores  = [v for _, v in dados]
+    valores  = [v for _, v, _ in dados]
     max_val  = max(valores) if max(valores) > 0 else 1
-    # Arredonda o teto para um número "bonito"
     import math
     teto = math.ceil(max_val / 100) * 100 if max_val < 10_000 else math.ceil(max_val / 1_000) * 1_000
     teto = max(teto, 1)
 
     n = len(dados)
 
-    # ── Grade horizontal (4 linhas) ──────────────────────────────────
     LINHAS_GRADE = 4
     for i in range(LINHAS_GRADE + 1):
         frac  = i / LINHAS_GRADE
         y_gr  = pad_top + area_alt - int(area_alt * frac)
         val_y = teto * frac
 
-        # linha pontilhada
         for xi in range(pad_left, larg - pad_right, 8):
             canvas_grafico.create_line(xi, y_gr, xi + 4, y_gr,
                                        fill="#E8DDD9", width=1)
 
-        # rótulo eixo Y
         if val_y < 1000:
             txt_y = f"R${val_y:.0f}"
         else:
@@ -136,12 +127,10 @@ def _desenhar_grafico(canvas_grafico, dados):
                                    font=("Arial", 10), fill=COR_TEXTO_SUB,
                                    anchor="e")
 
-    # ── Eixo X base ──────────────────────────────────────────────────
     canvas_grafico.create_line(pad_left, pad_top + area_alt,
                                larg - pad_right, pad_top + area_alt,
                                fill="#D1C7C3", width=2)
 
-    # ── Calcular coordenadas dos pontos ──────────────────────────────
     def _x_ponto(i):
         if n == 1:
             return pad_left + area_larg // 2
@@ -150,24 +139,21 @@ def _desenhar_grafico(canvas_grafico, dados):
     def _y_ponto(val):
         return pad_top + area_alt - int(area_alt * val / teto)
 
-    pontos = [(_x_ponto(i), _y_ponto(val)) for i, (_, val) in enumerate(dados)]
+    pontos = [(_x_ponto(i), _y_ponto(val)) for i, (_, val, _) in enumerate(dados)]
 
-    # ── Área sombreada abaixo da linha (polígono) ────────────────────
     base_y = pad_top + area_alt
     poligono = []
     for x, y in pontos:
         poligono += [x, y]
-    # fechar o polígono pela base
     poligono += [pontos[-1][0], base_y, pontos[0][0], base_y]
 
     canvas_grafico.create_polygon(
         poligono,
-        fill="#FDDEDE",   # vermelho bem claro
+        fill="#FDDEDE",
         outline="",
         smooth=True
     )
 
-    # ── Linha principal ──────────────────────────────────────────────
     if len(pontos) >= 2:
         coords_linha = []
         for x, y in pontos:
@@ -181,8 +167,7 @@ def _desenhar_grafico(canvas_grafico, dados):
             capstyle="round"
         )
 
-    # ── Rótulos do eixo X + marcas verticais ─────────────────────────
-    for i, (dia, val) in enumerate(dados):
+    for i, (dia, val, _) in enumerate(dados):
         x, y = pontos[i]
         canvas_grafico.create_line(x, pad_top + area_alt,
                                    x, pad_top + area_alt + 6,
@@ -192,31 +177,26 @@ def _desenhar_grafico(canvas_grafico, dados):
                                    font=("Arial", 11, "bold"),
                                    fill=COR_TEXTO_SUB)
 
-    # ── Pontos sobre a linha + tooltip ───────────────────────────────
     RAIO = 5
-    tooltips = {}   # id_oval → texto do tooltip
+    tooltips = {}
 
-    for i, (dia, val) in enumerate(dados):
+    for i, (dia, val, _) in enumerate(dados):
         x, y = pontos[i]
 
-        # sombra do ponto
         canvas_grafico.create_oval(x - RAIO - 1, y - RAIO - 1,
                                    x + RAIO + 1, y + RAIO + 1,
                                    fill="#E8DDD9", outline="")
 
-        # ponto principal
         oval_id = canvas_grafico.create_oval(
             x - RAIO, y - RAIO, x + RAIO, y + RAIO,
             fill=COR_PRIMARIA, outline="#FFFFFF", width=2
         )
 
-        # rótulo de valor — à direita do ponto, ou à esquerda se for a borda direita
         if val > 0:
             label_val = (f"R${val:,.0f}"
                          .replace(",", "X").replace(".", ",").replace("X", "."))
             label_w = len(label_val) * 7 + 4
             ly = y - RAIO - 2
-            # se o label ultrapassaria a borda direita, coloca à esquerda do ponto
             if x + RAIO + 6 + label_w > larg - pad_right:
                 lx  = x - RAIO - 6
                 anc = "e"
@@ -237,8 +217,7 @@ def _desenhar_grafico(canvas_grafico, dados):
 
         tooltips[oval_id] = (x, y, dia, val)
 
-    # ── Tooltip interativo ao passar o mouse ─────────────────────────
-    tooltip_box = [None, None]   # [retângulo, texto]
+    tooltip_box = [None, None]
 
     def _mostrar_tooltip(event):
         _esconder_tooltip()
@@ -250,7 +229,6 @@ def _desenhar_grafico(canvas_grafico, dados):
                  .replace(",", "X").replace(".", ",").replace("X", "."))
         tx = px
         ty = py - RAIO - 28
-        # ajuste para não sair da tela
         if tx + 90 > larg:
             tx = larg - 95
         if tx - 90 < 0:
@@ -286,7 +264,8 @@ def _desenhar_grafico(canvas_grafico, dados):
 def _desenhar_grafico_barras(canvas, dados):
     """
     Desenha gráfico de barras com faturamento por dia da semana.
-    Garante que todos os 7 dias apareçam, mesmo sem vendas.
+    Cada item de `dados` é (rotulo_dia, valor, data) — já vem pronto e
+    ordenado do Model, com os 7 dias preenchidos (inclusive zerados).
     """
     canvas.delete("all")
     larg = canvas.winfo_width()
@@ -294,11 +273,7 @@ def _desenhar_grafico_barras(canvas, dados):
     if larg < 10 or alt < 10:
         return
 
-    DIAS_ORDEM = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-
-    # Mapeia dados recebidos para dict
-    dados_dict = {dia: val for dia, val in dados} if dados else {}
-    valores_ordenados = [(d, dados_dict.get(d, 0.0)) for d in DIAS_ORDEM]
+    valores_ordenados = dados
 
     pad_left  = 72
     pad_right = 20
@@ -309,7 +284,7 @@ def _desenhar_grafico_barras(canvas, dados):
     area_alt  = alt  - pad_top  - pad_bot
 
     import math
-    max_val = max((v for _, v in valores_ordenados), default=1)
+    max_val = max((v for _, v, _ in valores_ordenados), default=1)
     if max_val == 0:
         canvas.create_text(larg // 2, alt // 2,
                            text="Sem vendas nos últimos 7 dias",
@@ -319,7 +294,6 @@ def _desenhar_grafico_barras(canvas, dados):
     teto = math.ceil(max_val / 100) * 100 if max_val < 10_000 else math.ceil(max_val / 1_000) * 1_000
     teto = max(teto, 1)
 
-    # Grade horizontal
     LINHAS = 4
     for i in range(LINHAS + 1):
         frac = i / LINHAS
@@ -331,7 +305,6 @@ def _desenhar_grafico_barras(canvas, dados):
         canvas.create_text(pad_left - 6, y_gr, text=txt_y,
                            font=("Arial", 10), fill=COR_TEXTO_SUB, anchor="e")
 
-    # Eixo X base
     canvas.create_line(pad_left, pad_top + area_alt,
                        larg - pad_right, pad_top + area_alt,
                        fill="#D1C7C3", width=2)
@@ -340,11 +313,9 @@ def _desenhar_grafico_barras(canvas, dados):
     espaco_total = area_larg / n
     largura_barra = espaco_total * 0.55
 
-    # Dia de hoje para destacar
-    import datetime
-    hoje_idx = datetime.datetime.now().weekday()  # 0=Seg, 6=Dom
+    hoje = datetime.date.today()
 
-    for i, (dia, val) in enumerate(valores_ordenados):
+    for i, (dia, val, data_item) in enumerate(valores_ordenados):
         x_centro = pad_left + espaco_total * i + espaco_total / 2
         x0 = x_centro - largura_barra / 2
         x1 = x_centro + largura_barra / 2
@@ -353,23 +324,19 @@ def _desenhar_grafico_barras(canvas, dados):
         y0 = pad_top + area_alt - altura_barra
         y1 = pad_top + area_alt
 
-        # Cor da barra — destaca o dia de hoje
-        cor_barra = COR_PRIMARIA if i == hoje_idx else "#D97070"
-        cor_borda  = "#A02020" if i == hoje_idx else "#B85555"
+        eh_hoje = (data_item == hoje)
+        cor_barra = COR_PRIMARIA if eh_hoje else "#D97070"
+        cor_borda  = "#A02020" if eh_hoje else "#B85555"
 
-        # Sombra suave da barra
         canvas.create_rectangle(x0 + 3, y0 + 3, x1 + 3, y1,
                                  fill="#E0C8C8", outline="", width=0)
 
-        # Barra principal
         canvas.create_rectangle(x0, y0, x1, y1,
                                  fill=cor_barra, outline=cor_borda, width=1)
 
-        # Arredondamento visual no topo (retângulo pequeno)
         canvas.create_rectangle(x0, y0, x1, y0 + 6,
                                  fill=cor_barra, outline="", width=0)
 
-        # Valor acima da barra
         if val > 0:
             label_val = (f"R${val:,.0f}"
                          .replace(",", "X").replace(".", ",").replace("X", "."))
@@ -378,30 +345,31 @@ def _desenhar_grafico_barras(canvas, dados):
                                 font=("Arial", 9, "bold"),
                                 fill=COR_PRIMARIA)
 
-        # Rótulo do dia no eixo X
-        cor_label = COR_TEXTO if i == hoje_idx else COR_TEXTO_SUB
-        peso_label = "bold" if i == hoje_idx else "normal"
+        cor_label = COR_TEXTO if eh_hoje else COR_TEXTO_SUB
+        peso_label = "bold" if eh_hoje else "normal"
         canvas.create_text(x_centro, pad_top + area_alt + 18,
                             text=dia,
                             font=("Arial", 11, peso_label),
                             fill=cor_label)
 
-        # Marca vertical no eixo X
         canvas.create_line(x_centro, pad_top + area_alt,
                             x_centro, pad_top + area_alt + 6,
                             fill="#D1C7C3", width=1)
 
-    # Badge "Hoje" acima da barra do dia atual
-    x_hoje = pad_left + espaco_total * hoje_idx + espaco_total / 2
-    val_hoje = valores_ordenados[hoje_idx][1]
-    if val_hoje > 0:
-        y_badge = pad_top + area_alt - int(area_alt * val_hoje / teto) - 26
-        canvas.create_rectangle(x_hoje - 22, y_badge - 8,
-                                  x_hoje + 22, y_badge + 8,
-                                  fill=COR_PRIMARIA, outline="", width=0)
-        canvas.create_text(x_hoje, y_badge,
-                            text="Hoje", font=("Arial", 9, "bold"),
-                            fill="#FFFFFF")
+    idx_hoje = next((i for i, (_, _, d) in enumerate(valores_ordenados) if d == hoje), None)
+
+    if idx_hoje is not None:
+        x_hoje = pad_left + espaco_total * idx_hoje + espaco_total / 2
+        val_hoje = valores_ordenados[idx_hoje][1]
+
+        if val_hoje > 0:
+            y_badge = pad_top + area_alt - int(area_alt * val_hoje / teto) - 26
+            canvas.create_rectangle(x_hoje - 22, y_badge - 8,
+                                      x_hoje + 22, y_badge + 8,
+                                      fill=COR_PRIMARIA, outline="", width=0)
+            canvas.create_text(x_hoje, y_badge,
+                                text="Hoje", font=("Arial", 9, "bold"),
+                                fill="#FFFFFF")
 
 
 def _construir_painel_tempo_real(parent, controlador, janela_raiz):
@@ -412,7 +380,6 @@ def _construir_painel_tempo_real(parent, controlador, janela_raiz):
     card_painel = _criar_card(parent)
     card_painel.pack(fill="x", padx=28, pady=(0, 18))
 
-    # ── Cabeçalho do painel ─────────────────────────────────────────
     cab_painel = ctk.CTkFrame(card_painel, fg_color="transparent")
     cab_painel.pack(fill="x", padx=18, pady=(14, 0))
 
@@ -434,7 +401,6 @@ def _construir_painel_tempo_real(parent, controlador, janela_raiz):
 
     ctk.CTkFrame(card_painel, height=1, fg_color=COR_BORDA).pack(fill="x", padx=0, pady=(10, 0))
 
-    # ── Carregar dados ──────────────────────────────────────────────
     try:
         grupos = controlador.buscar_pedidos_em_aberto_por_status()
     except Exception:
@@ -442,14 +408,12 @@ def _construir_painel_tempo_real(parent, controlador, janela_raiz):
 
     total_abertos = sum(len(v) for v in grupos.values())
 
-    # ── Badge total ──────────────────────────────────────────────────
     if total_abertos == 0:
         ctk.CTkLabel(card_painel,
                      text="✅  Nenhum pedido em aberto no momento.",
                      font=("Arial", 15), text_color=COR_VERDE).pack(pady=20)
         return card_painel
 
-    # ── Grade das 3 colunas de status ───────────────────────────────
     grade = ctk.CTkFrame(card_painel, fg_color="transparent")
     grade.pack(fill="x", padx=14, pady=14)
 
@@ -457,18 +421,15 @@ def _construir_painel_tempo_real(parent, controlador, janela_raiz):
         lista_pedidos = grupos.get(nome_col, [])
         quantidade    = len(lista_pedidos)
 
-        # Coluna
         col = ctk.CTkFrame(grade, fg_color=cor_bg_col, corner_radius=12,
                             border_width=1, border_color=cor_borda_col)
         col.pack(side="left", padx=(0, 12), expand=True, fill="both")
 
-        # Cabeçalho da coluna
         cab_col = ctk.CTkFrame(col, fg_color="transparent")
         cab_col.pack(fill="x", padx=12, pady=(12, 6))
         ctk.CTkLabel(cab_col, text=f"{emoji_col}  {nome_col}",
                      font=("Arial", 14, "bold"), text_color=cor_txt_col).pack(side="left")
 
-        # Badge contador
         badge_count = ctk.CTkFrame(cab_col, fg_color=cor_txt_col,
                                     width=28, height=22, corner_radius=11)
         badge_count.pack(side="right")
@@ -483,7 +444,6 @@ def _construir_painel_tempo_real(parent, controlador, janela_raiz):
                          font=("Arial", 13), text_color=COR_TEXTO_SUB).pack(pady=14)
             continue
 
-        # Cards de pedido dentro da coluna
         for ped in lista_pedidos[:6]:
             val_fmt = (
                 f"R$ {float(ped.get('valor_total', 0)):,.2f}"
@@ -534,9 +494,8 @@ def _recarregar_painel(card_painel, controlador, janela_raiz, lbl_hora):
     except Exception:
         return
 
-    # Destrói apenas o conteúdo abaixo do cabeçalho (2º filho em diante)
     filhos = card_painel.winfo_children()
-    for w in filhos[2:]:  # mantém cab_painel e a linha divisória
+    for w in filhos[2:]:
         w.destroy()
 
     try:
@@ -638,7 +597,6 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
                                    scrollbar_button_color=COR_BORDA, corner_radius=0)
     area.pack(fill="both", expand=True)
 
-    # ── CABEÇALHO ─────────────────────────────────────────────────────
     barra = ctk.CTkFrame(area, fg_color="transparent")
     barra.pack(fill="x", padx=28, pady=(24, 4))
     ctk.CTkLabel(barra, text="Visão Geral", font=("Arial", 26, "bold"),
@@ -647,7 +605,6 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
                  font=("Arial", 14), text_color=COR_TEXTO_SUB).pack(side="left", padx=(14, 0))
     ctk.CTkFrame(area, height=1, fg_color=COR_BORDA).pack(fill="x", padx=28, pady=(4, 18))
 
-    # ── KPI CARDS ─────────────────────────────────────────────────────
     try:
         resumo = controlador.pegar_dados_resumo()
     except Exception:
@@ -665,10 +622,8 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
     _card_kpi(linha_kpi, "Clientes",      resumo["clientes"],     "cadastrados",
               COR_VERDE, "👥", COR_VERDE_CLARO)
 
-    # ── PAINEL TEMPO REAL — PEDIDOS EM ABERTO ─────────────────────────
     card_painel = _construir_painel_tempo_real(area, controlador, janela_raiz)
 
-    # Salva referência ao label de hora para o auto-refresh
     cab_painel = card_painel.winfo_children()[0]
     lbl_hora   = [w for w in cab_painel.winfo_children()
                   if isinstance(w, ctk.CTkLabel) and "Atualizado" in (w.cget("text") or "")]
@@ -676,7 +631,6 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
 
     _agendar_proxima_atualizacao(card_painel, controlador, janela_raiz, lbl_hora)
 
-    # ── GRÁFICO + TOP PRODUTOS ─────────────────────────────────────────
     linha_meio = ctk.CTkFrame(area, fg_color="transparent")
     linha_meio.pack(fill="x", padx=28, pady=(0, 18))
 
@@ -685,10 +639,11 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
 
     try:
         dados_semana = controlador.pegar_vendas_semana()
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao buscar vendas da semana: {e}")
         dados_semana = []
 
-    total_semana = sum(v for _, v in dados_semana)
+    total_semana = sum(v for _, v, _ in dados_semana)
     total_semana_fmt = (
         f"R$ {total_semana:,.2f}"
         .replace(",", "X").replace(".", ",").replace("X", ".")
@@ -745,7 +700,6 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
         ctk.CTkLabel(card_top, text="Sem dados no período",
                      font=("Arial", 13), text_color=COR_TEXTO_SUB).pack(pady=20)
 
-    # ── GRÁFICO DE BARRAS — FATURAMENTO POR DIA DA SEMANA ─────────────
     card_barras = _criar_card(area)
     card_barras.pack(fill="x", padx=28, pady=(0, 18))
 
@@ -773,7 +727,6 @@ def renderizar_dashboard(frame_conteudo, janela_raiz, paleta_cores):
     canvas_barras.bind("<Configure>", _redraw_barras)
     canvas_barras.after(300, _redraw_barras)
 
-    # ── PEDIDOS RECENTES ──────────────────────────────────────────────
     card_tabela = _criar_card(area)
     card_tabela.pack(fill="x", padx=28, pady=(0, 28))
 
