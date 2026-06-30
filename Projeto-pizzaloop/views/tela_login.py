@@ -185,7 +185,7 @@ def renderizar_login(root, callback_sucesso):
             ent_senha.unbind("<Return>")
             callback_sucesso(usuario_logado)
         else:
-            messagebox.showerror("Erro de Autenticação", msg)
+            messagebox.showerror("Erro de Acesso", "E-mail ou senha incorreta")
 
     def tentar_entrar():
         email_digitado = ent_email.get().strip()
@@ -199,6 +199,8 @@ def renderizar_login(root, callback_sucesso):
             messagebox.showerror("E-mail Inválido", "O formato do e-mail digitado está incorreto.\nExemplo: nome@empresa.com")
             return
 
+        ent_senha.delete(0, 'end')
+        
         btn_entrar.configure(text="Carregando...", state="disabled")
 
         threading.Thread(
@@ -218,106 +220,7 @@ def renderizar_login(root, callback_sucesso):
     ent_email.bind("<Return>", lambda e: tentar_entrar())
     ent_senha.bind("<Return>", lambda e: tentar_entrar())
 
-    # SEÇÃO DE LINKS INTERATIVOS
-    link_criar = ctk.CTkLabel(card, text="Criar uma nova conta", cursor="hand2", text_color=ORANGE, font=("Arial", 13, "bold"))
-    link_criar.pack(pady=(5, 5))
-    
-    # Efeitos de Hover para o link de cadastro
-    link_criar.bind("<Enter>", lambda e: link_criar.configure(text_color=ORANGE_H, font=("Arial", 13, "bold", "underline")))
-    link_criar.bind("<Leave>", lambda e: link_criar.configure(text_color=ORANGE, font=("Arial", 13, "bold")))
-    link_criar.bind("<Button-1>", lambda e: abrir_cadastro())
-
     ctk.CTkLabel(
         card, text="Esqueceu sua senha? Contate o administrador.",
         font=("Arial", 12), text_color=TEXT_S
     ).pack(pady=(5, 0))
-
-    # ========================================================
-    # JANELA AUXILIAR: CADASTRO DE NOVOS USUÁRIOS
-    # ========================================================
-    def abrir_cadastro():
-        janela = ctk.CTkToplevel(root)
-        janela.geometry("420x420")
-        janela.title("Criar Nova Conta")
-        janela.attributes("-topmost", True)
-        janela.resizable(False, False)
-        janela.configure(fg_color=CARD)
-
-        janela.update_idletasks()
-        x = root.winfo_x() + (root.winfo_width() // 2) - 210
-        y = root.winfo_y() + (root.winfo_height() // 2) - 210
-        janela.geometry(f"420x420+{x}+{y}")
-
-        # Atalho para fechar no ESC
-        janela.bind("<Escape>", lambda e: janela.destroy())
-
-        ctk.CTkLabel(janela, text="Criar Conta", font=("Arial", 23, "bold"), text_color=TEXT).pack(pady=(25, 20))
-
-        # Campo Email
-        ctk.CTkLabel(janela, text="Email Institucional", font=("Arial", 13, "bold"), text_color=TEXT).pack(anchor="w", padx=60)
-        campo_email = ctk.CTkEntry(janela, placeholder_text="exemplo@pizzaloop.com", width=300, height=40, border_color=BORDER)
-        campo_email.pack(pady=(4, 14))
-        campo_email.focus()
-
-        # Campo Senha
-        ctk.CTkLabel(janela, text="Senha de Acesso", font=("Arial", 13, "bold"), text_color=TEXT).pack(anchor="w", padx=60)
-        campo_senha = ctk.CTkEntry(janela, placeholder_text="Mínimo 6 caracteres", width=300, height=40, show="*", border_color=BORDER)
-        campo_senha.pack(pady=(4, 14))
-
-        # Campo Confirmar Senha
-        ctk.CTkLabel(janela, text="Confirmar Senha", font=("Arial", 13, "bold"), text_color=TEXT).pack(anchor="w", padx=60)
-        campo_confirmar = ctk.CTkEntry(janela, placeholder_text="Repita a senha", width=300, height=40, show="*", border_color=BORDER)
-        campo_confirmar.pack(pady=(4, 25))
-
-        # Navegação por teclado inteligente (Enter pula campos)
-        campo_email.bind("<Return>", lambda e: campo_senha.focus())
-        campo_senha.bind("<Return>", lambda e: campo_confirmar.focus())
-        campo_confirmar.bind("<Return>", lambda e: salvar())
-
-        def processar_cadastro(email, senha):
-            ok, msg = regras.cadastrar_novo(email, senha)
-            root.after(0, lambda: finalizar_cadastro(ok, msg))
-
-        def finalizar_cadastro(ok, msg):
-            btn_cadastrar.configure(text="Cadastrar", state="normal")
-            if ok:
-                messagebox.showinfo("Sucesso", "Conta criada com sucesso!", parent=janela)
-                janela.destroy()
-            else:
-                messagebox.showerror("Erro no Cadastro", msg, parent=janela)
-
-        def salvar():
-            email_cadastro = campo_email.get().strip()
-            senha_cadastro = campo_senha.get()
-            conf_senha = campo_confirmar.get()
-            
-            if not email_cadastro or not senha_cadastro or not conf_senha:
-                messagebox.showerror("Campos Incompletos", "Por favor, preencha todos os campos obrigatórios.", parent=janela)
-                return
-            
-            if not email_e_valido(email_cadastro):
-                messagebox.showerror("E-mail Inválido", "Insira um formato de e-mail corporativo válido.", parent=janela)
-                return
-
-            if len(senha_cadastro) < 6:
-                messagebox.showerror("Senha Fraca", "A senha precisa ter no mínimo 6 caracteres para garantir a segurança.", parent=janela)
-                return
-
-            if senha_cadastro != conf_senha:
-                messagebox.showerror("Divergência", "As senhas digitadas não coincidem.", parent=janela)
-                return
-
-            btn_cadastrar.configure(text="Processando...", state="disabled")
-            
-            threading.Thread(
-                target=processar_cadastro,
-                args=(email_cadastro, senha_cadastro),
-                daemon=True
-            ).start()
-
-        btn_cadastrar = ctk.CTkButton(
-            janela, text="Cadastrar", fg_color=ORANGE, hover_color=ORANGE_H,
-            width=200, height=44, corner_radius=10,
-            font=("Arial", 14, "bold"), command=salvar
-        )
-        btn_cadastrar.pack()

@@ -3,7 +3,7 @@
 # Integrado com: bcrypt (Apenas Admin), Texto Limpo (Funcionários),
 # validação de email, MAX_TENTATIVAS e proteção contra timing attacks.
 # ========================================================
-
+import time
 import re
 import bcrypt
 from typing import Tuple
@@ -70,7 +70,7 @@ class LoginController:
         # LÓGICA DE VALIDAÇÃO MISTA (ADMIN vs FUNCIONÁRIO)
         # ========================================================
         try:
-            if usuario_existe and cargo == "admin":
+            if ( not usuario_existe) or (usuario_existe and cargo == "admin"):
                 # Se for administrador, valida usando bcrypt
                 hash_para_verificar = (
                     senha_hash_banco.encode("utf-8")
@@ -92,6 +92,7 @@ class LoginController:
 
         # Verificação do resultado da autenticação
         if not (usuario_existe and senha_correta):
+            time.sleep(2.0)
             self._tentativas[email] = tentativas_feitas + 1
             tentativas_restantes = self.MAX_TENTATIVAS - self._tentativas[email]
 
