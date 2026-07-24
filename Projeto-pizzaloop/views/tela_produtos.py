@@ -6,6 +6,7 @@ import customtkinter as ctk
 from PIL import Image
 from controllers.produto_controller import ProdutoController
 
+# Configurações de Temas e Cores
 COR_FUNDO_TELA       = "#f8fafc"
 COR_FUNDO_CARD       = "#ffffff"
 COR_BORDA_CARD       = "#e2e8f0"
@@ -50,6 +51,7 @@ _cache_imagens: dict = {}
 
 
 def _invalidar_cache(id_produto):
+    """Remove a imagem do cache e força a liberação do garbage collector."""
     if id_produto in _cache_imagens:
         _cache_imagens.pop(id_produto, None)
 
@@ -78,7 +80,7 @@ def _carregar_imagem(caminho_banco, id_produto):
 
     try:
         with Image.open(caminho_real) as img_disco:
-            img = img_disco.convert("RGBA")
+            img = img_disco.convert("RGBA").copy()
             ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             _cache_imagens[id_produto] = ctk_img
             return ctk_img
@@ -104,8 +106,10 @@ def _copiar_para_pasta_interna(caminho_original, id_produto):
 
     padrao_busca = os.path.join(PASTA_IMAGENS, f"{id_produto}.*")
     for arquivo_antigo in glob.glob(padrao_busca):
-        try: os.remove(arquivo_antigo)
-        except: pass
+        try:
+            os.remove(arquivo_antigo)
+        except Exception:
+            pass
 
     extensao = os.path.splitext(caminho_original)[1].lower()
     nome_arquivo = f"{id_produto}{extensao}"
@@ -120,20 +124,26 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
     id_prod   = dados_produto["id_produto"] if eh_edicao else None
 
     janela = ctk.CTkToplevel(janela_raiz)
-    janela.geometry("540x720")
+    janela.geometry("540x730")
     janela.title("Editar Produto" if eh_edicao else "Novo Produto")
-    janela.attributes("-topmost", True)
+    
+    janela.transient(janela_raiz)
     janela.focus_force()
 
     def _fechar_formulario_seguro():
-        try: janela.grab_release()
-        except: pass
+        try:
+            janela.grab_release()
+        except Exception:
+            pass
         try:
             for id_tarefa in janela.eval('after info').split():
                 janela.after_cancel(id_tarefa)
-        except: pass
-        try: janela.destroy()
-        except: pass
+        except Exception:
+            pass
+        try:
+            janela.destroy()
+        except Exception:
+            pass
 
     janela.protocol("WM_DELETE_WINDOW", _fechar_formulario_seguro)
 
@@ -143,7 +153,7 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
         font=("Arial", 18, "bold")
     ).pack(pady=(15, 5))
 
-    abas = ctk.CTkTabview(janela, width=480, height=540)
+    abas = ctk.CTkTabview(janela, width=480, height=560)
     abas.pack(padx=20, fill="both", expand=True)
 
     tab_dados = abas.add("Informações Básicas")
@@ -159,23 +169,18 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
 
     campo_nome = _criar_campo(tab_dados, "Nome do Produto *", "Ex: Pizza Calabresa")
 
-    # ----------------------------------------------------
-    # CONTAINER: BLOCO DE PREÇO SIMPLES (PRODUTOS TRADICIONAIS)
-    # ----------------------------------------------------
+    # CATEGORIA (Posicionada antes para controlar o fluxo de telas)
+    frame_cat = ctk.CTkFrame(tab_dados, fg_color="transparent")
+    frame_cat.pack(fill="x", padx=15, pady=4)
+    ctk.CTkLabel(frame_cat, text="Categoria", font=("Arial", 12, "bold")).pack(anchor="w")
+
+    # CONTAINER: PREÇO SIMPLES (Para Bebidas, Adicionais e Combos)
     frame_preco_simples = ctk.CTkFrame(tab_dados, fg_color="transparent")
-    frame_preco_simples.pack(fill="x", padx=15, pady=2)
-    
     ctk.CTkLabel(frame_preco_simples, text="Preço de venda (R$)", font=("Arial", 12, "bold")).pack(anchor="w")
     campo_preco = ctk.CTkEntry(frame_preco_simples, placeholder_text="Ex: 45.00", height=32)
-    campo_preco.pack(fill="x", pady=(2, 4))
-    
-    ctk.CTkLabel(frame_preco_simples, text="Custo de produção (R$)", font=("Arial", 12, "bold")).pack(anchor="w")
-    campo_custo = ctk.CTkEntry(frame_preco_simples, placeholder_text="Ex: 18.00", height=32)
-    campo_custo.pack(fill="x", pady=(2, 0))
+    campo_preco.pack(fill="x", pady=(2, 0))
 
-    # ----------------------------------------------------
-    # CONTAINER: MÚLTIPLOS TAMANHOS (EXCLUSIVO PIZZAS)
-    # ----------------------------------------------------
+    # CONTAINER: MÚLTIPLOS TAMANHOS (Para Salgadas e Doces)
     frame_multi_tamanhos = ctk.CTkFrame(tab_dados, border_width=1, border_color="#cbd5e1")
     
     ctk.CTkLabel(frame_multi_tamanhos, text="Variações de Preço por Tamanho", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=3, padx=10, pady=5, sticky="w")
@@ -183,41 +188,50 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
     ctk.CTkLabel(frame_multi_tamanhos, text="Fatias", font=("Arial", 11, "underline")).grid(row=1, column=1, padx=5, pady=2)
     ctk.CTkLabel(frame_multi_tamanhos, text="Preço (R$)", font=("Arial", 11, "underline")).grid(row=1, column=2, padx=5, pady=2)
 
-    # Inputs das variações de tamanho
-    ctk.CTkLabel(frame_multi_tamanhos, text="Pequena (P):").grid(row=2, column=0, padx=10, pady=4, sticky="w")
-    txt_f_p = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_p.insert(0, "4"); txt_f_p.grid(row=2, column=1, padx=5, pady=4)
-    txt_p_p = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_p.grid(row=2, column=2, padx=10, pady=4)
+    ctk.CTkLabel(frame_multi_tamanhos, text="Pequena (P):").grid(row=2, column=0, padx=10, pady=3, sticky="w")
+    txt_f_p = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_p.insert(0, "4"); txt_f_p.grid(row=2, column=1, padx=5, pady=3)
+    txt_p_p = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_p.grid(row=2, column=2, padx=10, pady=3)
 
-    ctk.CTkLabel(frame_multi_tamanhos, text="Média (M):").grid(row=3, column=0, padx=10, pady=4, sticky="w")
-    txt_f_m = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_m.insert(0, "6"); txt_f_m.grid(row=3, column=1, padx=5, pady=4)
-    txt_p_m = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_m.grid(row=3, column=2, padx=10, pady=4)
+    ctk.CTkLabel(frame_multi_tamanhos, text="Média (M):").grid(row=3, column=0, padx=10, pady=3, sticky="w")
+    txt_f_m = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_m.insert(0, "6"); txt_f_m.grid(row=3, column=1, padx=5, pady=3)
+    txt_p_m = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_m.grid(row=3, column=2, padx=10, pady=3)
 
-    ctk.CTkLabel(frame_multi_tamanhos, text="Grande (G):").grid(row=4, column=0, padx=10, pady=4, sticky="w")
-    txt_f_g = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_g.insert(0, "8"); txt_f_g.grid(row=4, column=1, padx=5, pady=4)
-    txt_p_g = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_g.grid(row=4, column=2, padx=10, pady=4)
+    ctk.CTkLabel(frame_multi_tamanhos, text="Grande (G):").grid(row=4, column=0, padx=10, pady=3, sticky="w")
+    txt_f_g = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_g.insert(0, "8"); txt_f_g.grid(row=4, column=1, padx=5, pady=3)
+    txt_p_g = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_g.grid(row=4, column=2, padx=10, pady=3)
 
-    ctk.CTkLabel(frame_multi_tamanhos, text="Família:").grid(row=5, column=0, padx=10, pady=4, sticky="w")
-    txt_f_fam = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_fam.insert(0, "12"); txt_f_fam.grid(row=5, column=1, padx=5, pady=4)
-    txt_p_fam = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_fam.grid(row=5, column=2, padx=10, pady=4)
+    ctk.CTkLabel(frame_multi_tamanhos, text="Família:").grid(row=5, column=0, padx=10, pady=3, sticky="w")
+    txt_f_fam = ctk.CTkEntry(frame_multi_tamanhos, width=45, justify="center"); txt_f_fam.insert(0, "12"); txt_f_fam.grid(row=5, column=1, padx=5, pady=3)
+    txt_p_fam = ctk.CTkEntry(frame_multi_tamanhos, placeholder_text="0.00", width=120); txt_p_fam.grid(row=5, column=2, padx=10, pady=3)
 
+    # CONTAINER: CUSTO DE PRODUÇÃO (Separado e sempre disponível)
+    frame_custo = ctk.CTkFrame(tab_dados, fg_color="transparent")
+    frame_custo.pack(fill="x", padx=15, pady=4)
+    ctk.CTkLabel(frame_custo, text="Custo de produção (R$)", font=("Arial", 12, "bold")).pack(anchor="w")
+    campo_custo = ctk.CTkEntry(frame_custo, placeholder_text="Ex: 18.00", height=32)
+    campo_custo.pack(fill="x", pady=(2, 0))
 
-    frame_cat = ctk.CTkFrame(tab_dados, fg_color="transparent")
-    frame_cat.pack(fill="x", padx=15, pady=5)
-    ctk.CTkLabel(frame_cat, text="Categoria", font=("Arial", 12, "bold")).pack(anchor="w")
+    frame_desc = ctk.CTkFrame(tab_dados, fg_color="transparent")
+    frame_desc.pack(fill="x", padx=15, pady=4)
+    ctk.CTkLabel(frame_desc, text="Descrição", font=("Arial", 12, "bold")).pack(anchor="w")
+    campo_descricao = ctk.CTkTextbox(frame_desc, height=55)
+    campo_descricao.pack(fill="x", pady=(2, 0))
+
+    label_aviso_combo = ctk.CTkLabel(tab_dados, text="", font=("Arial", 11), text_color=COR_LARANJA)
+    label_aviso_combo.pack(pady=2)
 
     def monitorar_categoria(categoria_selecionada):
         if categoria_selecionada in ["Salgada", "Doce"]:
             frame_preco_simples.pack_forget()
-            frame_multi_tamanhos.pack(fill="x", padx=15, pady=8)
+            frame_multi_tamanhos.pack(fill="x", padx=15, pady=6, before=frame_custo)
             label_aviso_combo.configure(text="")
         elif categoria_selecionada == "Combo":
             frame_multi_tamanhos.pack_forget()
-            frame_preco_simples.pack(fill="x", padx=15, pady=2)
-            abas.set("Composição do Combo / Sabores")
+            frame_preco_simples.pack(fill="x", padx=15, pady=4, before=frame_custo)
             label_aviso_combo.configure(text="⚠️ Configure os sabores/itens na aba de composição.")
         else:
             frame_multi_tamanhos.pack_forget()
-            frame_preco_simples.pack(fill="x", padx=15, pady=2)
+            frame_preco_simples.pack(fill="x", padx=15, pady=4, before=frame_custo)
             label_aviso_combo.configure(text="")
 
     campo_categoria = ctk.CTkComboBox(
@@ -228,16 +242,7 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
     )
     campo_categoria.pack(fill="x", pady=(2, 0))
 
-    frame_desc = ctk.CTkFrame(tab_dados, fg_color="transparent")
-    frame_desc.pack(fill="x", padx=15, pady=5)
-    ctk.CTkLabel(frame_desc, text="Descrição", font=("Arial", 12, "bold")).pack(anchor="w")
-    campo_descricao = ctk.CTkTextbox(frame_desc, height=60)
-    campo_descricao.pack(fill="x", pady=(2, 0))
-
-    label_aviso_combo = ctk.CTkLabel(tab_dados, text="", font=("Arial", 11), text_color=COR_LARANJA)
-    label_aviso_combo.pack(pady=2)
-
-    # --- ABA 2 (COMPOSIÇÃO DO COMBO) ---
+    # ABA COMPOSIÇÃO COMBO
     var_tipo_combo = ctk.StringVar(value="normal")
     frame_radios = ctk.CTkFrame(tab_combo, fg_color="transparent")
     frame_radios.pack(fill="x", pady=5)
@@ -290,46 +295,52 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
                 "preco": prod["preco"]
             })
 
-    def _inicializacao_ui_segura():
-        if not janela.winfo_exists(): return
+    # PREENCHIMENTO IMEDIATO SEM DELAY / AFTER
+    carregar_produtos_disponiveis()
 
-        carregar_produtos_disponiveis()
+    if eh_edicao:
+        cat_atual = dados_produto.get("categoria", "Salgada")
+        campo_categoria.set(cat_atual)
+        monitorar_categoria(cat_atual)
 
-        if eh_edicao:
-            campo_nome.insert(0, dados_produto.get("nome_produto", ""))
-            desc_antiga = dados_produto.get("descricao") or ""
-            campo_descricao.insert("1.0", str(desc_antiga).strip())
+        campo_nome.delete(0, "end")
+        campo_nome.insert(0, dados_produto.get("nome_produto", ""))
 
-            cat_atual = dados_produto.get("categoria", "Salgada")
-            campo_categoria.set(cat_atual)
-            monitorar_categoria(cat_atual)
+        desc_antiga = dados_produto.get("descricao") or ""
+        campo_descricao.delete("1.0", "end")
+        campo_descricao.insert("1.0", str(desc_antiga).strip())
 
-            if cat_atual in ["Salgada", "Doce"]:
-                # Puxa os múltiplos tamanhos do banco de dados
-                tamanhos_salvos = controlador.obter_tamanhos_do_produto(id_prod)
-                if tamanhos_salvos:
-                    if "Pequena" in tamanhos_salvos: txt_p_p.insert(0, str(tamanhos_salvos["Pequena"]["preco"]))
-                    if "Média" in tamanhos_salvos:   txt_p_m.insert(0, str(tamanhos_salvos["Média"]["preco"]))
-                    if "Grande" in tamanhos_salvos:  txt_p_g.insert(0, str(tamanhos_salvos["Grande"]["preco"]))
-                    if "Família" in tamanhos_salvos: txt_p_fam.insert(0, str(tamanhos_salvos["Família"]["preco"]))
-            else:
-                campo_preco.insert(0, str(dados_produto.get("preco", "")))
-                custo_val = dados_produto.get("custo", 0) or 0
-                if custo_val: campo_custo.insert(0, str(custo_val))
+        custo_val = dados_produto.get("custo", 0) or 0
+        campo_custo.delete(0, "end")
+        if custo_val:
+            campo_custo.insert(0, str(custo_val))
 
-            if cat_atual == "Combo":
-                if "metade" in str(desc_antiga).lower() or "sabor" in campo_nome.get().lower():
-                    var_tipo_combo.set("metade")
-                alternar_modo_combo()
-                abas.set("Composição do Combo / Sabores")
-            else:
-                abas.set("Informações Básicas")
+        if cat_atual in ["Salgada", "Doce"]:
+            tamanhos_salvos = controlador.obter_tamanhos_do_produto(id_prod)
+            if tamanhos_salvos:
+                if "Pequena" in tamanhos_salvos: 
+                    txt_p_p.delete(0, "end"); txt_p_p.insert(0, str(tamanhos_salvos["Pequena"]["preco"]))
+                if "Média" in tamanhos_salvos:   
+                    txt_p_m.delete(0, "end"); txt_p_m.insert(0, str(tamanhos_salvos["Média"]["preco"]))
+                if "Grande" in tamanhos_salvos:  
+                    txt_p_g.delete(0, "end"); txt_p_g.insert(0, str(tamanhos_salvos["Grande"]["preco"]))
+                if "Família" in tamanhos_salvos: 
+                    txt_p_fam.delete(0, "end"); txt_p_fam.insert(0, str(tamanhos_salvos["Família"]["preco"]))
         else:
-            campo_categoria.set("Salgada")
-            monitorar_categoria("Salgada")
-            abas.set("Informações Básicas")
+            campo_preco.delete(0, "end")
+            campo_preco.insert(0, str(dados_produto.get("preco", "")))
 
-    janela.after(100, _inicializacao_ui_segura)
+        if cat_atual == "Combo":
+            if "metade" in str(desc_antiga).lower() or "sabor" in campo_nome.get().lower():
+                var_tipo_combo.set("metade")
+            alternar_modo_combo()
+            abas.set("Composição do Combo / Sabores")
+        else:
+            abas.set("Informações Básicas")
+    else:
+        campo_categoria.set("Salgada")
+        monitorar_categoria("Salgada")
+        abas.set("Informações Básicas")
 
     def _salvar():
         nome      = campo_nome.get().strip()
@@ -342,52 +353,55 @@ def _abrir_formulario_produto(janela_raiz, controlador, on_sucesso, dados_produt
 
         id_prod_seguro = str(id_prod) if id_prod is not None else None
 
-        if categoria in ["Salgada", "Doce"]:
-            # Agrupa os valores da UI para enviar para o novo método do controlador
-            dados_tamanhos = {
-                "Pequena": {"fatias": int(txt_f_p.get() or 4), "preco": txt_p_p.get().strip()},
-                "Média":   {"fatias": int(txt_f_m.get() or 6), "preco": txt_p_m.get().strip()},
-                "Grande":  {"fatias": int(txt_f_g.get() or 8), "preco": txt_p_g.get().strip()},
-                "Família": {"fatias": int(txt_f_fam.get() or 12), "preco": txt_p_fam.get().strip()}
-            }
-            
-            sucesso, mensagem = controlador.validar_e_salvar_com_tamanhos(
-                nome_produto=nome,
-                categoria_produto=categoria,
-                descricao_produto=descricao,
-                dados_tamanhos=dados_tamanhos,
-                id_produto=id_prod_seguro
-            )
-        elif categoria == "Combo":
-            ids_vinculados = [str(item["id_produto"]) for item in lista_checkboxes_produtos if item["checkbox"].get() == 1]
+        try:
+            if categoria in ["Salgada", "Doce"]:
+                dados_tamanhos = {
+                    "Pequena": {"fatias": int(txt_f_p.get().strip() or 4), "preco": txt_p_p.get().strip()},
+                    "Média":   {"fatias": int(txt_f_m.get().strip() or 6), "preco": txt_p_m.get().strip()},
+                    "Grande":  {"fatias": int(txt_f_g.get().strip() or 8), "preco": txt_p_g.get().strip()},
+                    "Família": {"fatias": int(txt_f_fam.get().strip() or 12), "preco": txt_p_fam.get().strip()}
+                }
+                
+                sucesso, mensagem = controlador.validar_e_salvar_com_tamanhos(
+                    nome_produto=nome,
+                    categoria_produto=categoria,
+                    descricao_produto=descricao,
+                    dados_tamanhos=dados_tamanhos,
+                    id_produto=id_prod_seguro
+                )
+            elif categoria == "Combo":
+                ids_vinculados = [str(item["id_produto"]) for item in lista_checkboxes_produtos if item["checkbox"].get() == 1]
 
-            if len(ids_vinculados) < 2:
-                messagebox.showerror("Erro", "Selecione pelo menos 2 sabores para salvar o combo.", parent=janela)
-                return
+                if len(ids_vinculados) < 2:
+                    messagebox.showerror("Erro", "Selecione pelo menos 2 sabores para salvar o combo.", parent=janela)
+                    return
 
-            if var_tipo_combo.get() == "metade":
-                precos_sel = [item["preco"] for item in lista_checkboxes_produtos if item["checkbox"].get() == 1]
-                preco_final = str(max(precos_sel))
+                if var_tipo_combo.get() == "metade":
+                    precos_sel = [item["preco"] for item in lista_checkboxes_produtos if item["checkbox"].get() == 1]
+                    preco_final = str(max(precos_sel)) if precos_sel else "0.00"
+                else:
+                    preco_final = campo_preco.get().strip() if campo_preco.get() else "0.00"
+
+                sucesso, mensagem = controlador.validar_e_salvar_combo(
+                    nome_combo=nome,
+                    texto_preco=preco_final,
+                    ids_produtos_associados=ids_vinculados,
+                    id_produto=id_prod_seguro,
+                    descricao_combo=descricao,
+                    texto_custo=campo_custo.get().strip()
+                )
             else:
-                preco_final = campo_preco.get().strip() if campo_preco.get() else "0.00"
-
-            sucesso, mensagem = controlador.validar_e_salvar_combo(
-                nome_combo=nome,
-                texto_preco=preco_final,
-                ids_produtos_associados=ids_vinculados,
-                id_produto=id_prod_seguro,
-                descricao_combo=descricao,
-                texto_custo=campo_custo.get().strip()
-            )
-        else:
-            preco_raw = campo_preco.get().strip()
-            custo_raw = campo_custo.get().strip()
-            if not preco_raw:
-                messagebox.showerror("Erro", "O preço é obrigatório.", parent=janela)
-                return
-            sucesso, mensagem = controlador.validar_e_salvar(
-                nome, preco_raw, id_prod, descricao, categoria, custo_raw
-            )
+                preco_raw = campo_preco.get().strip()
+                custo_raw = campo_custo.get().strip()
+                if not preco_raw:
+                    messagebox.showerror("Erro", "O preço é obrigatório.", parent=janela)
+                    return
+                sucesso, mensagem = controlador.validar_e_salvar(
+                    nome, preco_raw, id_prod, descricao, categoria, custo_raw
+                )
+        except ValueError:
+            messagebox.showerror("Erro de Formatação", "Certifique-se de digitar números válidos para fatias e preços.", parent=janela)
+            return
 
         if sucesso:
             messagebox.showinfo("Sucesso", mensagem, parent=janela)
@@ -452,7 +466,11 @@ def _criar_comando_remover_imagem(id_produto, label_icone, botao_remover, catego
                 botao_remover.place_forget()
 
                 padrao_busca = os.path.join(PASTA_IMAGENS, f"{id_produto}.*")
-                for f in glob.glob(padrao_busca): os.remove(f)
+                for f in glob.glob(padrao_busca):
+                    try:
+                        os.remove(f)
+                    except Exception:
+                        pass
 
                 messagebox.showinfo("Sucesso", "Foto removida com sucesso!")
         except Exception as e:
@@ -468,8 +486,10 @@ def _acao_excluir(id_produto, controlador, on_atualizar):
         _invalidar_cache(id_produto)
         padrao_busca = os.path.join(PASTA_IMAGENS, f"{id_produto}.*")
         for f in glob.glob(padrao_busca):
-            try: os.remove(f)
-            except: pass
+            try: 
+                os.remove(f)
+            except Exception: 
+                pass
         on_atualizar()
     else:
         messagebox.showerror("Erro", mensagem)
@@ -595,7 +615,6 @@ def _construir_card(pai, produto, controlador, on_atualizar, linha, column):
         wraplength=200, justify="center"
     ).pack(side="top", padx=15, pady=(0, 2))
 
-    # Formatação de exibição do preço no card (caso seja pizza, pode mostrar o valor base ou 'A partir de')
     if categoria_produto in ["Salgada", "Doce"]:
         card_preco_texto = "Vários tamanhos"
     else:
@@ -606,7 +625,6 @@ def _construir_card(pai, produto, controlador, on_atualizar, linha, column):
         font=("Arial", 14, "bold"), text_color="#0f172a"
     ).pack(side="top", pady=(2, 0))
 
-    # Custo e margem
     if custo_produto > 0 and isinstance(preco_produto, (int, float)) and preco_produto > 0:
         margem_pct = ((preco_produto - custo_produto) / preco_produto) * 100
         cor_margem = COR_VERDE if margem_pct >= 30 else ("#D97706" if margem_pct >= 10 else "#DC2626")
@@ -639,7 +657,7 @@ def _construir_card(pai, produto, controlador, on_atualizar, linha, column):
         fg_color="transparent", hover_color="#fee2e2",
         text_color="#ef4444", font=("Arial", 12),
         width=30, height=30, corner_radius=6,
-        command=lambda:_acao_excluir(id_produto, controlador, on_atualizar),
+        command=lambda: _acao_excluir(id_produto, controlador, on_atualizar),
     ).pack(side="right")
 
 
