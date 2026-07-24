@@ -19,13 +19,21 @@ class AuditoriaModel:
         finally:
             cursor.close()
 
-    def buscar_todos(self, limite=200):
+    def buscar_todos(self, limite=200, cargos= None):
         cursor = self.conexao.cursor(dictionary=True)
         try:
-            cursor.execute(
-                "SELECT * FROM auditoria ORDER BY data_hora DESC LIMIT %s",
-                (limite,)
-            )
-            return cursor.fetchall()
+           query = "SELECT * FROM auditoria"
+           params = []
+
+           if cargos:
+               placeholders = ", ".join(["%s"] * len(cargos))
+               query += f"WHERE usuario_cargo IN ({placeholders})"
+               params.extend(cargos)
+            
+           query += "ORDER BY data_hora DESC LIMIT %s"
+           params.append(cargos)
+
+           cursor.execute(query, params)
+           return cursor.fetchal()
         finally:
             cursor.close()

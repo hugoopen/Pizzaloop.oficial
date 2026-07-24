@@ -27,4 +27,4 @@ class AuditoriaController:
         self.model.registrar(email, nome, cargo, acao, modulo, detalhe)
 
     def listar_historico(self, limite=200):
-        return self.model.buscar_todos(limite)
+        return self.model.buscar_todos(limite, cargos=["funcionario", "entregador"])
